@@ -1,0 +1,125 @@
+import pandas as pd
+import numpy as np
+import re
+
+
+def parse_motion_txt(txt_path):
+    """Parse the motion index file"""
+    motion_db = {}
+    with open(txt_path) as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) < 8:
+                continue
+
+            # Parse fields
+            motion_id = int(parts[0])
+            orig_start = int(parts[1])
+            orig_end = int(parts[2])
+            abs_start = int(parts[3])
+            abs_end = int(parts[4])
+            status = parts[5]
+            filename = parts[6]
+            filehash = parts[7]
+
+            # Extract CMU id, assuming filename format xx_xx_poses.bvh
+            match = re.search(r"(\d+)_(\d+)_poses", filename)
+            if match:
+                cmu_main = int(match.group(1))
+                cmu_sub = int(match.group(2))
+                key = (cmu_main, cmu_sub, status)
+                motion_db[key] = {
+                    'motion_id': motion_id,
+                    'orig_range': (orig_start, orig_end),
+                    'abs_range': (abs_start, abs_end),
+                    'filehash': filehash,
+                    'filename': filename
+                }
+            else:
+                print("Error with txt matching names")
+                continue
+
+    return motion_db
+
+
+def convert_frames(csv_path, txt_path, output_path):
+    """Main conversion function"""
+    # Load data
+    motion_db = parse_motion_txt(txt_path)
+    df = pd.read_csv(csv_path)
+
+    results = []
+
+    for _, row in df.iterrows():
+        # Extract CMU id
+        path = row['source_path']
+        match = re.search(r"/(\d+)_(\d+)_poses", path)
+        if not match:
+            print("Error with matching names")
+            continue
+
+        cmu_main = int(match.group(1))
+        cmu_sub = int(match.group(2))  # Adjust group indices according to the actual path
+        key = (cmu_main, cmu_sub, "Standard")
+        key_m = (cmu_main, cmu_sub, "Mirrored")
+
+        # Find matching motion entries
+        if key not in motion_db or key_m not in motion_db:
+            print("Don't find correspond matching in txt")
+            continue
+
+        motion = motion_db[key]
+        motion_m = motion_db[key_m]
+        # orig_start, orig_end = motion['orig_range']
+        lshift, rshift = row['start_frame'], row['end_frame']
+        # abs_start, abs_end = motion['abs_range']
+        # abs_start_m, abs_end_m = motion_m['abs_range']
+        abs_start, abs_end = motion['abs_range'][0] + lshift , \
+            min(motion['abs_range'][0] + rshift, motion['abs_range'][1])
+        abs_start_m, abs_end_m = motion_m['abs_range'][0] + lshift,  \
+            min(motion_m['abs_range'][0] + rshift, motion_m['abs_range'][1])
+
+        # Run frame conversion
+        # def convert(frame):
+        #     if frame < orig_start or frame > orig_end:
+        #         raise ValueError(f"Frame {frame} is outside the original range [{orig_start}, {orig_end}]")
+        #     return abs_start + (frame - orig_start)
+
+        try:
+            # global_start = convert(row['start_frame'])
+            # global_end = convert(row['end_frame'])
+
+            results.append({
+                'key': row['new_name'].rstrip(".npy"),
+                'new_name': row['new_name'].replace(".npy", ".txt"),
+                'source_path': path,
+                'global_start': abs_start,
+                'global_end': abs_end,
+                'global_start_m': abs_start_m,
+                'global_end_m': abs_end_m,
+                'motion_id': int(motion_m['motion_id'])/2,
+                'local_start': lshift,
+                'local_end': rshift,
+                # 'cmu_main': cmu_main,
+                # 'cmu_sub': cmu_sub,
+                'filehash': motion['filehash']
+            })
+
+        except ValueError as e:
+            print(f"Skipping invalid data row: {e}")
+
+    # Saveresult
+    result_df = pd.DataFrame(results)
+    result_df.to_csv(output_path, index=False)
+    print(f"Conversion complete. Result saved to {output_path}")
+
+from pathlib import Path
+
+if __name__ == '__main__':
+    script_dir = Path(__file__).parent.resolve()
+
+    index_csv = script_dir.parent.parent.parent / 'Datasets' / 'CMU2withRoot_Text' / 'index_cmu.csv'
+    sequence_txt = script_dir.parent.parent.parent / 'Datasets' / 'CMU2withRoot_Text' / 'Sequences.txt'
+    output_csv = script_dir.parent.parent.parent / 'Datasets' / 'CMU2withRoot_Text' / 'text2phase.csv'
+
+    convert_frames(index_csv, sequence_txt, output_csv)
