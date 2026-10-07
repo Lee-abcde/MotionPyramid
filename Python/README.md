@@ -99,7 +99,7 @@ python train_vq.py --load=./Datasets/HumanML3D --save=./results/HumanML3D_styliz
 
 The `--save` path controls where training logs, arguments, checkpoints, and generated phase/manifold outputs are written. You can change `./results/HumanML3D_stylized_manifold` to any experiment folder name you prefer.
 
-If you do not train the stylized manifold model yourself, download the pretrained VQ model and per-frame phase embedding from [Google Drive](https://drive.google.com/drive/folders/1riyN7F7s74Q23f5biGabUdFuHWrS07KH?usp=sharing). Unzip the files so the folder is available as:
+If you do not train the stylized manifold model yourself, download the pretrained VQ model and per-frame phase embedding from [ETH Polybox](https://polybox.ethz.ch/index.php/s/3reE6rGw5jfpgeq). Unzip the files so the folder is available as:
 
 ```text
 Python/pre-trained/HumanML3D
